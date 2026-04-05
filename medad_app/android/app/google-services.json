@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "951044983673",
+    "project_id": "medad-1",
+    "storage_bucket": "medad-1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:951044983673:android:c12b3d9b9566281b36bda8",
+        "android_client_info": {
+          "package_name": "com.example.medad_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAZowL8CzcYr65m15e3wrFQXOhGgXnZmug"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:951044983673:android:3707d15245bc69fb36bda8",
+        "android_client_info": {
+          "package_name": "com.medad.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAZowL8CzcYr65m15e3wrFQXOhGgXnZmug"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
