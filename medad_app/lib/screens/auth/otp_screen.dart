@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import 'role_selection_screen.dart';
 import '../common/waiting_approval_screen.dart';
-import '../common/home_screen.dart';
 
 class OTPScreen extends StatefulWidget {
   final String verificationId;
@@ -61,7 +60,7 @@ class _OTPScreenState extends State<OTPScreen> {
       if (!mounted) return;
 
       if (userData == null) {
-        Navigator.pushReplacement(
+        Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
             builder: (context) => RoleSelectionScreen(
@@ -69,17 +68,15 @@ class _OTPScreenState extends State<OTPScreen> {
               phone: widget.phone,
             ),
           ),
+          (_) => false,
         );
         return;
       }
 
       if (userData.role == 'customer' || userData.isApproved) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
+        Navigator.of(context).popUntil((route) => route.isFirst);
       } else {
-        Navigator.pushReplacement(
+        Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
             builder: (context) => WaitingApprovalScreen(
@@ -87,6 +84,7 @@ class _OTPScreenState extends State<OTPScreen> {
               role: userData.role,
             ),
           ),
+          (_) => false,
         );
       }
     } catch (error) {

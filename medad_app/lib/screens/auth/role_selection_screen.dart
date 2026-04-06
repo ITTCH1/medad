@@ -73,7 +73,7 @@ class RoleSelectionScreen extends StatelessWidget {
                   ),
                   child: ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: (role['color'] as Color).withOpacity(0.1),
+                      backgroundColor: (role['color'] as Color).withValues(alpha: 0.1),
                       child: Icon(role['icon'], color: role['color'], size: 28),
                     ),
                     title: Text(

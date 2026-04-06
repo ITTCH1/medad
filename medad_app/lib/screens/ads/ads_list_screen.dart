@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/ad_service.dart';
 import '../../models/ad_model.dart';
 import 'ad_details_screen.dart';
+import 'add_ad_screen.dart';
 import 'search_results_screen.dart';
 
 class AdsListScreen extends StatelessWidget {
@@ -72,7 +73,10 @@ class AdsListScreen extends StatelessWidget {
       floatingActionButton: FloatingActionButton(
         child: Icon(Icons.add),
         onPressed: () {
-          Navigator.pushNamed(context, '/add_ad');
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const AddAdScreen()),
+          );
         },
       ),
     );
