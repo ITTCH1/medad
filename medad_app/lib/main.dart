@@ -4,24 +4,18 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'services/auth_service.dart';
-import 'models/user_model.dart';  // ✅ أضف هذا السطر
+import 'models/user_model.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/common/home_screen.dart';
 import 'screens/common/waiting_approval_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // تهيئة Firebase
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  
-  // تعطيل App Check للتطوير (يمنع مشكلة sign-out التلقائي)
-  await FirebaseAuth.instance.setSettings(
-    appVerificationDisabledForTesting: true,
-  );
-  
+
   runApp(const MyApp());
 }
 
@@ -54,19 +48,19 @@ class MyApp extends StatelessWidget {
                 body: Center(child: CircularProgressIndicator()),
               );
             }
-            
+
             if (snapshot.hasError) {
               debugPrint('❌ Auth error: ${snapshot.error}');
               return const LoginScreen();
             }
-            
+
             final user = snapshot.data;
-            
+
             if (user == null) {
               return const LoginScreen();
             }
-            
-            // المستخدم موجود، تحقق من حالته
+
+            // المستخدم مسجّل، تحقق من بيانات الملف الشخصي
             return FutureBuilder<UserModel?>(
               future: Provider.of<AuthService>(context, listen: false).getCurrentUserData(),
               builder: (context, userDataSnapshot) {
@@ -75,17 +69,14 @@ class MyApp extends StatelessWidget {
                     body: Center(child: CircularProgressIndicator()),
                   );
                 }
-                
-                if (userDataSnapshot.hasError || userDataSnapshot.data == null) {
-                  // لا يوجد بيانات للمستخدم، سجل خروج
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    Provider.of<AuthService>(context, listen: false).signOut();
-                  });
-                  return const LoginScreen();
+
+                final userData = userDataSnapshot.data;
+                if (userData == null) {
+                  // مستخدم جديد ما أكملش البروفايل — افتح الشاشة الرئيسية
+                  // هي تتحقق من وجود البيانات وتوجه للشاشة المناسبة
+                  return const HomeScreen();
                 }
-                
-                final userData = userDataSnapshot.data!;
-                
+
                 if (userData.role == 'customer' || userData.isApproved) {
                   return const HomeScreen();
                 } else {

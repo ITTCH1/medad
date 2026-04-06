@@ -9,6 +9,8 @@ class AuthService extends ChangeNotifier {
 
   User? get currentUser => _auth.currentUser;
 
+  User? getCurrentUser() => _auth.currentUser;
+
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   // إرسال رمز التحقق

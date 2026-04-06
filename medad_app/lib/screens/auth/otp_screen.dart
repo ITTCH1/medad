@@ -58,6 +58,8 @@ class _OTPScreenState extends State<OTPScreen> {
 
       final userData = await authService.getCurrentUserData();
 
+      if (!mounted) return;
+
       if (userData == null) {
         Navigator.pushReplacement(
           context,
@@ -68,28 +70,24 @@ class _OTPScreenState extends State<OTPScreen> {
             ),
           ),
         );
+        return;
+      }
+
+      if (userData.role == 'customer' || userData.isApproved) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
       } else {
-        if (userData.role == 'customer') {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
-          );
-        } else if (userData.isApproved) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
-          );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => WaitingApprovalScreen(
-                userId: userCredential.user!.uid,
-                role: userData.role,
-              ),
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WaitingApprovalScreen(
+              userId: userCredential.user!.uid,
+              role: userData.role,
             ),
-          );
-        }
+          ),
+        );
       }
     } catch (error) {
       debugPrint('❌ خطأ في التحقق: $error');

@@ -17,7 +17,7 @@ class AdService {
   Future<List<String>> uploadImages(List<File> images, String adId) async {
     List<String> urls = [];
     for (int i = 0; i < images.length; i++) {
-      String fileName = 'ads/$adId/${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+      String fileName = 'ads/$adId/${DateTime.now().millisecondsSinceEpoch + i}_$i.jpg';
       Reference ref = _storage.ref().child(fileName);
       await ref.putFile(images[i]);
       String url = await ref.getDownloadURL();

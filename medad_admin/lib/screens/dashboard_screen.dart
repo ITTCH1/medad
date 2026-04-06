@@ -13,12 +13,14 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
+  String _usersFilter = 'all';
 
-  final List<Widget> _screens = [
-    const DashboardContent(),
-    const UsersScreen(),
-    const AdsScreen(),
-  ];
+  void selectNavItem(int index, {String? filter}) {
+    setState(() {
+      _selectedIndex = index;
+      if (filter != null) _usersFilter = filter;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,14 +29,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           SideMenu(
             selectedIndex: _selectedIndex,
-            onItemSelected: (index) {
-              setState(() {
-                _selectedIndex = index;
-              });
-            },
+            onItemSelected: selectNavItem,
           ),
           Expanded(
-            child: _screens[_selectedIndex],
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: [
+                DashboardContent(onNavigate: selectNavItem),
+                UsersScreen(initialFilter: _usersFilter),
+                const AdsScreen(),
+              ],
+            ),
           ),
         ],
       ),
@@ -42,9 +47,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class DashboardContent extends StatelessWidget {
-  const DashboardContent({super.key});
+typedef NavCallback = void Function(int index, {String? filter});
 
+class DashboardContent extends StatefulWidget {
+  final NavCallback onNavigate;
+
+  const DashboardContent({super.key, required this.onNavigate});
+
+  @override
+  State<DashboardContent> createState() => _DashboardContentState();
+}
+
+class _DashboardContentState extends State<DashboardContent> {
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -57,16 +71,25 @@ class DashboardContent extends StatelessWidget {
             style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
-          // عرض الإحصائيات باستخدام StreamBuilder
-          _buildStatsSection(),
-          const SizedBox(height: 32),
-          const Text(
-            'آخر المستخدمين المسجلين',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
           Expanded(
-            child: _buildRecentUsers(),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildStatsSection(),
+                  const SizedBox(height: 32),
+                  const Text(
+                    'آخر المستخدمين المسجلين',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 400,
+                    child: _buildRecentUsers(),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -83,8 +106,6 @@ class DashboardContent extends StatelessWidget {
 
         final users = usersSnapshot.data!.docs;
         final totalUsers = users.length;
-        
-        // حساب عدد التجار والمندوبين بانتظار الموافقة
         final pendingUsers = users.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
           final role = data['role'];
@@ -109,29 +130,21 @@ class DashboardContent extends StatelessWidget {
                   count: totalUsers.toString(),
                   icon: Icons.people,
                   color: Colors.blue,
-                  onTap: () {
-                    // تغيير القائمة المختارة إلى المستخدمين
-                    _changeToUsersScreen(context);
-                  },
+                  onTap: () => widget.onNavigate(1),
                 ),
                 _buildStatCard(
                   title: 'الإعلانات',
                   count: totalAds.toString(),
                   icon: Icons.image,
                   color: Colors.green,
-                  onTap: () {
-                    _changeToAdsScreen(context);
-                  },
+                  onTap: () => widget.onNavigate(2),
                 ),
                 _buildStatCard(
                   title: 'بانتظار الموافقة',
                   count: pendingUsers.toString(),
                   icon: Icons.hourglass_empty,
                   color: Colors.orange,
-                  onTap: () {
-                    // تغيير القائمة المختارة إلى المستخدمين مع فلتر للمنتظرين
-                    _changeToUsersScreenWithPendingFilter(context);
-                  },
+                  onTap: () => widget.onNavigate(1, filter: 'pending'),
                 ),
               ],
             );
@@ -201,23 +214,19 @@ class DashboardContent extends StatelessWidget {
             final name = data['name'] ?? 'مستخدم جديد';
             final phone = data['phone'] ?? '';
 
-            String roleText;
             Color roleColor;
             IconData roleIcon;
 
             switch (role) {
               case 'merchant':
-                roleText = 'تاجر';
                 roleColor = Colors.green;
                 roleIcon = Icons.store;
                 break;
               case 'delivery':
-                roleText = 'مندوب';
                 roleColor = Colors.orange;
                 roleIcon = Icons.delivery_dining;
                 break;
               default:
-                roleText = 'عميل';
                 roleColor = Colors.blue;
                 roleIcon = Icons.person;
             }
@@ -250,38 +259,5 @@ class DashboardContent extends StatelessWidget {
         );
       },
     );
-  }
-
-  void _changeToUsersScreen(BuildContext context) {
-    // العثور على SideMenu وتغيير الفهرس
-    final state = context.findAncestorStateOfType<_DashboardScreenState>();
-    if (state != null) {
-      state.setState(() {
-        state._selectedIndex = 1;
-      });
-    }
-  }
-
-  void _changeToAdsScreen(BuildContext context) {
-    final state = context.findAncestorStateOfType<_DashboardScreenState>();
-    if (state != null) {
-      state.setState(() {
-        state._selectedIndex = 2;
-      });
-    }
-  }
-
-  void _changeToUsersScreenWithPendingFilter(BuildContext context) {
-    final state = context.findAncestorStateOfType<_DashboardScreenState>();
-    if (state != null) {
-      state.setState(() {
-        state._selectedIndex = 1;
-      });
-      // إرسال إشارة لشاشة المستخدمين لتطبيق فلتر المنتظرين
-      // يمكن استخدام Provider أو Notification
-      Future.delayed(const Duration(milliseconds: 100), () {
-        UsersScreen.applyPendingFilter = true;
-      });
-    }
   }
 }

@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
 import '../../services/ad_service.dart';
-import '../../services/auth_service.dart';
 import '../../models/ad_model.dart';
 
 class AddAdScreen extends StatefulWidget {
+  const AddAdScreen({super.key});
+
   @override
-  _AddAdScreenState createState() => _AddAdScreenState();
+  AddAdScreenState createState() => AddAdScreenState();
 }
 
-class _AddAdScreenState extends State<AddAdScreen> {
+class AddAdScreenState extends State<AddAdScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
@@ -22,7 +24,7 @@ class _AddAdScreenState extends State<AddAdScreen> {
   List<File> _images = [];
   bool _isLoading = false;
   
-  List<String> _categories = [
+  final List<String> _categories = [
     'إلكترونيات',
     'أثاث',
     'عقارات',
@@ -55,7 +57,7 @@ class _AddAdScreenState extends State<AddAdScreen> {
     try {
       // إنشاء الإعلان أولاً للحصول على ID
       AdModel ad = AdModel(
-        userId: AuthService().getCurrentUser()!.uid,
+        userId: FirebaseAuth.instance.currentUser!.uid,
         title: _titleController.text,
         description: _descController.text,
         price: double.parse(_priceController.text),
@@ -73,13 +75,16 @@ class _AddAdScreenState extends State<AddAdScreen> {
       
       // تحديث الإعلان بصوره
       await AdService().updateAd(adId, {'images': imageUrls});
-      
+
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تم نشر الإعلان بنجاح')),
+        const SnackBar(content: Text('تم نشر الإعلان بنجاح')),
       );
-      
+
       Navigator.pop(context);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('حدث خطأ: ${e.toString()}')),
       );
@@ -156,8 +161,8 @@ class _AddAdScreenState extends State<AddAdScreen> {
             
             // التصنيف
             DropdownButtonFormField<String>(
-              value: _selectedCategory,
-              decoration: InputDecoration(labelText: 'التصنيف'),
+              initialValue: _selectedCategory,
+              decoration: const InputDecoration(labelText: 'التصنيف'),
               items: _categories.map((cat) {
                 return DropdownMenuItem(value: cat, child: Text(cat));
               }).toList(),
@@ -188,10 +193,10 @@ class _AddAdScreenState extends State<AddAdScreen> {
                 ? Center(child: CircularProgressIndicator())
                 : ElevatedButton(
                     onPressed: _submitAd,
-                    child: Text('نشر الإعلان'),
                     style: ElevatedButton.styleFrom(
-                      minimumSize: Size(double.infinity, 50),
+                      minimumSize: const Size(double.infinity, 50),
                     ),
+                    child: const Text('نشر الإعلان'),
                   ),
           ],
         ),

@@ -5,8 +5,8 @@ import '../../models/ad_model.dart';
 
 class AdDetailsScreen extends StatelessWidget {
   final String adId;
-  
-  AdDetailsScreen({required this.adId});
+
+  const AdDetailsScreen({super.key, required this.adId});
 
   Future<void> _callPhone(String phone) async {
     Uri url = Uri.parse('tel:$phone');

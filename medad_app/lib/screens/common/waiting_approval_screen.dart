@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/auth_service.dart';
 import 'home_screen.dart';
+import '../../screens/auth/login_screen.dart';
 
 class WaitingApprovalScreen extends StatefulWidget {
   final String userId;
@@ -20,6 +23,7 @@ class WaitingApprovalScreen extends StatefulWidget {
 
 class _WaitingApprovalScreenState extends State<WaitingApprovalScreen> {
   bool _isChecking = false;
+  StreamSubscription? _approvalSubscription;
 
   @override
   void initState() {
@@ -27,8 +31,14 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen> {
     _listenForApproval();
   }
 
+  @override
+  void dispose() {
+    _approvalSubscription?.cancel();
+    super.dispose();
+  }
+
   void _listenForApproval() {
-    FirebaseFirestore.instance
+    _approvalSubscription = FirebaseFirestore.instance
         .collection('users')
         .doc(widget.userId)
         .snapshots()
@@ -63,7 +73,10 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen> {
           // تسجيل خروج المستخدم
           await FirebaseAuth.instance.signOut();
           if (mounted) {
-            Navigator.pushReplacementNamed(context, '/');
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+              (route) => false,
+            );
           }
         }
         return;
@@ -99,9 +112,13 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen> {
   }
 
   Future<void> _signOut() async {
+    _approvalSubscription?.cancel();
     await FirebaseAuth.instance.signOut();
     if (mounted) {
-      Navigator.pushReplacementNamed(context, '/');
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
     }
   }
 

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../services/ad_service.dart';
 import '../../models/ad_model.dart';
 import 'ad_details_screen.dart';
+import 'search_results_screen.dart';
 
 class AdsListScreen extends StatelessWidget {
   final String? category;
-  
-  AdsListScreen({this.category});
+
+  const AdsListScreen({super.key, this.category});
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +22,7 @@ class AdsListScreen extends StatelessWidget {
         ],
       ),
       body: StreamBuilder<List<AdModel>>(
-        stream: Provider.of<AdService>(context).getAllAds(),
+        stream: AdService().getAllAds(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('حدث خطأ: ${snapshot.error}'));

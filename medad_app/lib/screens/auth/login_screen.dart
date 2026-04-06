@@ -23,6 +23,22 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    // فقط الأرقام
+    if (!RegExp(r'^\d+$').hasMatch(phone)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('رقم الجوال يجب أن يحتوي على أرقام فقط')),
+      );
+      return;
+    }
+
+    // تحقق من طول الرقم (لليمن: 7-9 أرقام)
+    if (phone.length < 7 || phone.length > 9) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('رقم الجوال يجب أن يكون بين 7 و 9 أرقام')),
+      );
+      return;
+    }
+
     if (!phone.startsWith('+')) {
       phone = '+967$phone';
     }
@@ -45,6 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
         },
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString())),
       );

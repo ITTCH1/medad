@@ -46,10 +46,30 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   Future<String?> _uploadImage() async {
     if (_imageFile == null) return null;
 
-    final fileName = '${widget.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-    final ref = FirebaseStorage.instance.ref().child('profile_images/$fileName');
-    await ref.putFile(_imageFile!);
-    return await ref.getDownloadURL();
+    try {
+      final fileName =
+          '${widget.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final ref =
+          FirebaseStorage.instance.ref().child('profile_images/$fileName');
+
+      // Read file bytes and upload directly
+      final bytes = await _imageFile!.readAsBytes();
+      final metadata = SettableMetadata(
+        contentType: 'image/jpeg',
+        customMetadata: {'uid': widget.uid},
+      );
+      final uploadTask = ref.putData(bytes, metadata);
+      final snapshot = await uploadTask;
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+      debugPrint('✅ Upload success: $downloadUrl');
+      return downloadUrl;
+    } on FirebaseException catch (e) {
+      debugPrint('❌ Firebase Storage error: ${e.code} - ${e.message}');
+      throw Exception('فشل رفع الصورة: ${e.message}');
+    } catch (e) {
+      debugPrint('❌ Upload error: $e');
+      throw Exception('فشل رفع الصورة: $e');
+    }
   }
 
   Future<void> _saveProfile() async {

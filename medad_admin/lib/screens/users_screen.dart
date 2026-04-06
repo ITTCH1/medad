@@ -2,41 +2,45 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UsersScreen extends StatefulWidget {
-  const UsersScreen({super.key});
+  final String initialFilter;
+
+  const UsersScreen({super.key, this.initialFilter = 'all'});
 
   @override
   State<UsersScreen> createState() => _UsersScreenState();
-
-  static bool applyPendingFilter = false;
 }
 
 class _UsersScreenState extends State<UsersScreen> {
-  String _selectedFilter = 'all';
-  bool _isLoading = false;
+  late String _selectedFilter;
 
   @override
   void initState() {
     super.initState();
-    if (UsersScreen.applyPendingFilter) {
-      _selectedFilter = 'pending';
-      UsersScreen.applyPendingFilter = false;
+    _selectedFilter = widget.initialFilter;
+  }
+
+  @override
+  void didUpdateWidget(UsersScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialFilter != widget.initialFilter) {
+      setState(() => _selectedFilter = widget.initialFilter);
     }
   }
 
   // ✅ دالة الموافقة على مستخدم
   Future<void> _approveUser(String userId, String userType) async {
-    setState(() => _isLoading = true);
-    
     try {
       await FirebaseFirestore.instance.collection('users').doc(userId).update({
         'isApproved': true,
+        'status': 'active',
         'approvedAt': FieldValue.serverTimestamp(),
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('تمت الموافقة على ${userType == 'merchant' ? 'التاجر' : 'المندوب'} بنجاح'),
+            content:
+                Text('تمت الموافقة على ${userType == 'merchant' ? 'التاجر' : 'المندوب'} بنجاح'),
             backgroundColor: Colors.green,
           ),
         );
@@ -50,18 +54,18 @@ class _UsersScreenState extends State<UsersScreen> {
           ),
         );
       }
-    } finally {
-      setState(() => _isLoading = false);
     }
   }
 
-  // ✅ دالة رفض المستخدم (حذف الحساب)
+  // ✅ دالة رفض المستخدم (تعطيل الحساب)
   Future<void> _rejectUser(String userId, String userType) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('رفض الطلب'),
-        content: Text('هل أنت متأكد من رفض طلب ${userType == 'merchant' ? 'التاجر' : 'المندوب'}؟ سيتم حذف الحساب بالكامل.'),
+        content: Text(
+          'هل أنت متأكد من رفض ${userType == 'merchant' ? 'طلب التاجر' : 'طلب المندوب'}؟ سيتم تعطيل الحساب.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -77,19 +81,13 @@ class _UsersScreenState extends State<UsersScreen> {
 
     if (confirm != true) return;
 
-    setState(() => _isLoading = true);
-    
     try {
-      // حذف المستخدم من Authentication
-      // ملاحظة: لا يمكن حذف المستخدم من Authentication مباشرة من Flutter Web
-      // نحتاج إلى Cloud Function أو نقوم بتعطيل الحساب فقط
-      
       await FirebaseFirestore.instance.collection('users').doc(userId).update({
         'status': 'rejected',
         'isApproved': false,
         'rejectedAt': FieldValue.serverTimestamp(),
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -107,21 +105,29 @@ class _UsersScreenState extends State<UsersScreen> {
           ),
         );
       }
-    } finally {
-      setState(() => _isLoading = false);
     }
   }
 
   // ✅ دالة تعطيل/تفعيل المستخدم
   Future<void> _toggleUserStatus(String userId, bool currentStatus) async {
-    await FirebaseFirestore.instance.collection('users').doc(userId).update({
-      'isActive': !currentStatus,
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(currentStatus ? 'تم تعطيل المستخدم' : 'تم تفعيل المستخدم'),
-      ),
-    );
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+        'isActive': !currentStatus,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(currentStatus ? 'تم تعطيل المستخدم' : 'تم تفعيل المستخدم'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('حدث خطأ: ${e.toString()}'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   @override
@@ -136,47 +142,7 @@ class _UsersScreenState extends State<UsersScreen> {
             style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
-          
-          // ✅ إحصائيات سريعة
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('users').snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const SizedBox.shrink();
-              
-              final users = snapshot.data!.docs;
-              final pendingCount = users.where((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                final role = data['role'];
-                final isApproved = data['isApproved'] ?? false;
-                return (role == 'merchant' || role == 'delivery') && !isApproved;
-              }).length;
-              
-              if (pendingCount == 0) return const SizedBox.shrink();
-              
-              return Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.orange.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.notifications_active, color: Colors.orange.shade700),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'يوجد $pendingCount مستخدمين بانتظار الموافقة',
-                        style: TextStyle(color: Colors.orange.shade700),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          
+
           // ✅ شريط الفلترة
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -204,11 +170,14 @@ class _UsersScreenState extends State<UsersScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          
+
           // ✅ جدول المستخدمين
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('users').snapshots(),
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .orderBy('createdAt', descending: true)
+                  .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(child: Text('خطأ: ${snapshot.error}'));
@@ -220,18 +189,16 @@ class _UsersScreenState extends State<UsersScreen> {
 
                 var users = snapshot.data!.docs.map((doc) {
                   final data = doc.data() as Map<String, dynamic>;
-                  return {
-                    'id': doc.id,
-                    ...data,
-                  };
+                  return {'id': doc.id, ...data};
                 }).toList();
 
                 // تطبيق الفلتر
                 users = users.where((user) {
                   switch (_selectedFilter) {
                     case 'pending':
-                      return (user['role'] == 'merchant' || user['role'] == 'delivery') && 
-                             user['isApproved'] == false;
+                      return (user['role'] == 'merchant' ||
+                              user['role'] == 'delivery') &&
+                          user['isApproved'] == false;
                     case 'merchants':
                       return user['role'] == 'merchant';
                     case 'delivery':
@@ -268,12 +235,13 @@ class _UsersScreenState extends State<UsersScreen> {
                     final role = user['role'];
                     final isApproved = user['isApproved'] ?? false;
                     final isActive = user['isActive'] ?? true;
-                    final needsApproval = (role == 'merchant' || role == 'delivery') && !isApproved;
+                    final needsApproval =
+                        (role == 'merchant' || role == 'delivery') && !isApproved;
                     final isRejected = user['status'] == 'rejected';
 
-                    String roleText;
                     Color roleColor;
                     IconData roleIcon;
+                    String roleText;
 
                     switch (role) {
                       case 'merchant':
@@ -304,6 +272,10 @@ class _UsersScreenState extends State<UsersScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(user['phone'] ?? ''),
+                            Text(
+                              roleText,
+                              style: TextStyle(fontSize: 12, color: roleColor),
+                            ),
                             if (needsApproval)
                               const Text(
                                 'بانتظار الموافقة',
@@ -323,26 +295,28 @@ class _UsersScreenState extends State<UsersScreen> {
                             if (needsApproval) ...[
                               IconButton(
                                 icon: const Icon(Icons.check_circle, color: Colors.green),
-                                onPressed: _isLoading ? null : () => _approveUser(user['id'], role),
+                                onPressed: () => _approveUser(user['id'], role),
                                 tooltip: 'موافقة',
                               ),
                               IconButton(
                                 icon: const Icon(Icons.cancel, color: Colors.red),
-                                onPressed: _isLoading ? null : () => _rejectUser(user['id'], role),
+                                onPressed: () => _rejectUser(user['id'], role),
                                 tooltip: 'رفض',
                               ),
                             ],
                             // زر تعطيل/تفعيل للجميع
-                            IconButton(
-                              icon: Icon(
-                                isActive ? Icons.block : Icons.play_circle,
-                                color: isActive ? Colors.orange : Colors.green,
+                            if (!needsApproval)
+                              IconButton(
+                                icon: Icon(
+                                  isActive ? Icons.block : Icons.play_circle,
+                                  color: isActive ? Colors.orange : Colors.green,
+                                ),
+                                onPressed: () => _toggleUserStatus(user['id'], isActive),
+                                tooltip: isActive ? 'تعطيل' : 'تفعيل',
                               ),
-                              onPressed: _isLoading ? null : () => _toggleUserStatus(user['id'], isActive),
-                              tooltip: isActive ? 'تعطيل' : 'تفعيل',
-                            ),
                           ],
                         ),
+                        onTap: () => _showUserDetails(user),
                       ),
                     );
                   },
@@ -350,18 +324,71 @@ class _UsersScreenState extends State<UsersScreen> {
               },
             ),
           ),
-          
-          // ✅ مؤشر تحميل
-          if (_isLoading)
-            Container(
-              color: Colors.black54,
-              child: const Center(
-                child: CircularProgressIndicator(),
-              ),
-            ),
         ],
       ),
     );
+  }
+
+  void _showUserDetails(Map<String, dynamic> user) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(user['name'] ?? 'بيانات المستخدم'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _detailRow('الدور', user['role'] ?? ''),
+            _detailRow('الهاتف', user['phone'] ?? ''),
+            if (user['email'] != null && user['email'].toString().isNotEmpty)
+              _detailRow('البريد الإلكتروني', user['email']),
+            _detailRow(
+              'الحالة',
+              user['isApproved'] == true ? 'مقبول' : 'بانتظار الموافقة',
+            ),
+            if (user['status'] != null && user['status'].toString().isNotEmpty)
+              _detailRow('الحالة التفصيلية', user['status']),
+            if (user['createdAt'] != null)
+              _detailRow(
+                'تاريخ التسجيل',
+                _formatDate(user['createdAt']),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إغلاق'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$label: ',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(dynamic timestamp) {
+    if (timestamp == null) return '';
+    try {
+      final date = (timestamp as dynamic).toDate();
+      return '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return '';
+    }
   }
 
   Widget _buildFilterChip(String label, String value) {
@@ -369,9 +396,7 @@ class _UsersScreenState extends State<UsersScreen> {
       label: Text(label),
       selected: _selectedFilter == value,
       onSelected: (selected) {
-        setState(() {
-          _selectedFilter = value;
-        });
+        setState(() => _selectedFilter = value);
       },
       selectedColor: Colors.teal.shade100,
       checkmarkColor: Colors.teal,

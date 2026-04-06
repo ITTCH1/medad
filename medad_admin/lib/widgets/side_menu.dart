@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class SideMenu extends StatelessWidget {
   final int selectedIndex;
-  final Function(int) onItemSelected;
+  final void Function(int, {String? filter}) onItemSelected;
 
   const SideMenu({
     super.key,
@@ -42,18 +42,24 @@ class SideMenu extends StatelessWidget {
           ),
           _buildMenuItem(
             index: 2,
-            icon: Icons.image,  // ✅ تغيير Icons.ad إلى Icons.image
+            icon: Icons.image,
             title: 'الإعلانات',
           ),
           const Spacer(),
           const Divider(color: Colors.white24),
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.white70),
-            title: const Text('تسجيل الخروج', style: TextStyle(color: Colors.white70)),
+            title: const Text(
+              'تسجيل الخروج',
+              style: TextStyle(color: Colors.white70),
+            ),
             onTap: () async {
               await FirebaseAuth.instance.signOut();
               if (context.mounted) {
-                Navigator.pushReplacementNamed(context, '/');
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (context) => const Scaffold()),
+                  (route) => false,
+                );
               }
             },
           ),
@@ -79,7 +85,7 @@ class SideMenu extends StatelessWidget {
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
         ),
       ),
-      tileColor: isSelected ? Colors.white.withOpacity(0.1) : null,
+      tileColor: isSelected ? Colors.white10 : null,
       onTap: () => onItemSelected(index),
     );
   }
