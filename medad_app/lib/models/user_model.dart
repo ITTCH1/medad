@@ -11,6 +11,7 @@ class UserModel {
   bool isActive;
   DateTime createdAt;
   String? status; // 'active', 'rejected'
+  bool hasPassword; // هل قام المستخدم بإنشاء كلمة مرور
 
   UserModel({
     required this.uid,
@@ -23,6 +24,7 @@ class UserModel {
     this.isActive = true,
     required this.createdAt,
     this.status,
+    this.hasPassword = false,
   });
 
   // ✅ دالة toJson واحدة فقط
@@ -37,6 +39,7 @@ class UserModel {
         'isActive': isActive,
         'createdAt': createdAt,
         if (status != null) 'status': status,
+        'hasPassword': hasPassword,
       };
 
   // ✅ دالة fromJson
@@ -52,6 +55,7 @@ class UserModel {
       isActive: json['isActive'] ?? true,
       createdAt: (json['createdAt'] as Timestamp).toDate(),
       status: json['status'],
+      hasPassword: json['hasPassword'] ?? false,
     );
   }
 }

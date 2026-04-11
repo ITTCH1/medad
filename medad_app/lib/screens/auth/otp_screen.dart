@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import 'role_selection_screen.dart';
 import '../common/waiting_approval_screen.dart';
+import '../common/home_screen.dart';
 
 class OTPScreen extends StatefulWidget {
   final String verificationId;
@@ -22,11 +23,75 @@ class OTPScreen extends StatefulWidget {
 class _OTPScreenState extends State<OTPScreen> {
   final TextEditingController _otpController = TextEditingController();
   bool _isLoading = false;
+  bool _canResend = false;
+  int _countdown = 60;
+
+  @override
+  void initState() {
+    super.initState();
+    _startCountdown();
+  }
+
+  void _startCountdown() {
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted && _countdown > 0) {
+        setState(() => _countdown--);
+        _startCountdown();
+      } else if (mounted) {
+        setState(() => _canResend = true);
+      }
+    });
+  }
 
   @override
   void dispose() {
     _otpController.dispose();
     super.dispose();
+  }
+
+  Future<void> _resendOTP() async {
+    if (!_canResend || _isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+      _canResend = false;
+      _countdown = 60;
+    });
+
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      await authService.sendOTP(
+        widget.phone,
+        (newVerificationId) {
+          if (mounted) {
+            // تحديث verificationId الجديد
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('تم إرسال رمز التحقق بنجاح'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _canResend = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل إعادة الإرسال: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _startCountdown();
+      }
+    }
   }
 
   Future<void> _verifyOTP() async {
@@ -60,6 +125,7 @@ class _OTPScreenState extends State<OTPScreen> {
       if (!mounted) return;
 
       if (userData == null) {
+        // مستخدم جديد → اختيار الدور
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
@@ -73,9 +139,31 @@ class _OTPScreenState extends State<OTPScreen> {
         return;
       }
 
+      // الحساب معطل
+      if (!userData.isActive) {
+        await authService.signOut();
+        if (!mounted) return;
+        _showDisabledAccountDialog();
+        return;
+      }
+
+      // الحساب مرفوض
+      if (userData.status == 'rejected') {
+        await authService.signOut();
+        if (!mounted) return;
+        _showRejectedAccountDialog();
+        return;
+      }
+
       if (userData.role == 'customer' || userData.isApproved) {
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        // عميل أو حساب موافق عليه → الشاشة الرئيسية
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          (route) => false,
+        );
       } else {
+        // تاجر أو مندوب بانتظار الموافقة
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
@@ -104,6 +192,114 @@ class _OTPScreenState extends State<OTPScreen> {
         });
       }
     }
+  }
+
+  void _showDisabledAccountDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.block, color: Colors.red[700], size: 28),
+            const SizedBox(width: 8),
+            const Text('تم تعطيل حسابك'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'تم تعطيل حسابك من قبل الإدارة.',
+              style: TextStyle(color: Colors.grey[700]),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.red.shade700, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'يرجى مراجعة الدعم الفني لمعرفة السبب.',
+                      style: TextStyle(color: Colors.red.shade900, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('حسناً'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRejectedAccountDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.cancel, color: Colors.orange[700], size: 28),
+            const SizedBox(width: 8),
+            const Text('تم رفض حسابك'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'تم رفض طلبك من قبل الإدارة.',
+              style: TextStyle(color: Colors.grey[700]),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.orange.shade700, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'يرجى مراجعة الدعم الفني.',
+                      style: TextStyle(color: Colors.orange.shade900, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('حسناً'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -172,12 +368,15 @@ class _OTPScreenState extends State<OTPScreen> {
                     ),
               const SizedBox(height: 16),
               TextButton(
-                onPressed: _isLoading
-                    ? null
-                    : () {
-                        Navigator.pop(context);
-                      },
-                child: const Text('إعادة إرسال الرمز'),
+                onPressed: _canResend && !_isLoading ? _resendOTP : null,
+                child: Text(
+                  _canResend
+                      ? 'إعادة إرسال الرمز'
+                      : 'إعادة إرسال الرمز ($_countdown ث)',
+                  style: TextStyle(
+                    color: _canResend ? Colors.teal : Colors.grey,
+                  ),
+                ),
               ),
               const SizedBox(height: 20), // ✅ مسافة إضافية في الأسفل
             ],

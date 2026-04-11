@@ -30,9 +30,39 @@ class _HomeScreenState extends State<HomeScreen> {
     if (user != null) {
       final data = await AuthService().getCurrentUserData();
       if (mounted) {
+        // المستخدم محذوف من Firestore
+        if (data == null) {
+          await AuthService().signOut();
+          if (!mounted) return;
+          _showDeletedAccountMessage();
+          return;
+        }
         setState(() => _userModel = data);
       }
     }
+  }
+
+  void _showDeletedAccountMessage() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('إنشاء حساب جديد'),
+        content: const Text('لم يتم العثور على بيانات حسابك. يرجى إنشاء حساب جديد.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginScreen()),
+              );
+            },
+            child: const Text('حسناً'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _refresh() async {

@@ -46,12 +46,23 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen> {
       if (snapshot.exists && mounted) {
         final data = snapshot.data() as Map<String, dynamic>;
         final isApproved = data['isApproved'] ?? false;
+        final isActive = data['isActive'] ?? true;
 
-        if (isApproved) {
+        // التحقق منisActive و isApproved
+        if (isApproved && isActive) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const HomeScreen()),
           );
+        } else if (!isActive) {
+          // الحساب معطل
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('تم تعطيل حسابك. يرجى التواصل مع الدعم الفني.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          _signOut();
         }
       }
     });
@@ -62,40 +73,52 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen> {
 
     try {
       final userData = await AuthService().getCurrentUserData();
-      if (userData != null && userData.status == 'rejected') {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('تم رفض طلبك. يرجى التواصل مع الدعم الفني.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          // تسجيل خروج المستخدم
-          await FirebaseAuth.instance.signOut();
+      if (userData != null) {
+        // فحص حالة الرفض
+        if (userData.status == 'rejected') {
           if (mounted) {
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (context) => const LoginScreen()),
-              (route) => false,
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('تم رفض طلبك. يرجى التواصل مع الدعم الفني.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            await _signOut();
+          }
+          return;
+        }
+        
+        // فحص حالة التعطيل
+        if (!userData.isActive) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('تم تعطيل حسابك. يرجى التواصل مع الدعم الفني.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            await _signOut();
+          }
+          return;
+        }
+        
+        // فحص الموافقة
+        if (userData.isApproved) {
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
             );
           }
-        }
-        return;
-      }
-      if (userData != null && userData.isApproved) {
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('لا يزال حسابك قيد المراجعة. سيتم إعلامك عند الموافقة.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('لا يزال حسابك قيد المراجعة. سيتم إعلامك عند الموافقة.'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
         }
       }
     } catch (e) {
