@@ -106,17 +106,15 @@ class _DashboardContentState extends State<DashboardContent> {
 
         final users = usersSnapshot.data!.docs;
         final totalUsers = users.length;
-        final pendingUsers = users.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          final role = data['role'];
-          final isApproved = data['isApproved'] ?? false;
-          return (role == 'merchant' || role == 'delivery') && !isApproved;
-        }).length;
 
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance.collection('ads').snapshots(),
           builder: (context, adsSnapshot) {
             final totalAds = adsSnapshot.hasData ? adsSnapshot.data!.docs.length : 0;
+            final pendingAds = adsSnapshot.hasData ? adsSnapshot.data!.docs.where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              return (data['isApproved'] ?? false) == false;
+            }).length : 0;
 
             return GridView.count(
               shrinkWrap: true,
@@ -140,11 +138,11 @@ class _DashboardContentState extends State<DashboardContent> {
                   onTap: () => widget.onNavigate(2),
                 ),
                 _buildStatCard(
-                  title: 'بانتظار الموافقة',
-                  count: pendingUsers.toString(),
+                  title: 'إعلانات بانتظار الموافقة',
+                  count: pendingAds.toString(),
                   icon: Icons.hourglass_empty,
                   color: Colors.orange,
-                  onTap: () => widget.onNavigate(1, filter: 'pending'),
+                  onTap: () => widget.onNavigate(2),
                 ),
               ],
             );

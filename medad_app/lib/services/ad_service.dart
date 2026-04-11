@@ -19,23 +19,29 @@ class AdService {
     for (int i = 0; i < images.length; i++) {
       String fileName = 'ads/$adId/${DateTime.now().millisecondsSinceEpoch + i}_$i.jpg';
       Reference ref = _storage.ref().child(fileName);
-      await ref.putFile(images[i]);
-      String url = await ref.getDownloadURL();
+
+      final bytes = await images[i].readAsBytes();
+      final metadata = SettableMetadata(contentType: 'image/jpeg');
+      final uploadTask = ref.putData(bytes, metadata);
+      final snapshot = await uploadTask;
+      final url = await snapshot.ref.getDownloadURL();
       urls.add(url);
     }
     return urls;
   }
 
-  // الحصول على جميع الإعلانات النشطة
+  // الحصول على جميع الإعلانات النشطة والموافق عليها فقط
   Stream<List<AdModel>> getAllAds() {
     return _firestore
         .collection('ads')
-        .where('status', isEqualTo: 'active')
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => AdModel.fromJson(doc.data() as Map<String, dynamic>, doc.id))
-            .toList());
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => AdModel.fromJson(doc.data() as Map<String, dynamic>, doc.id))
+          .where((ad) => ad.status == 'active' && ad.isApproved)
+          .toList();
+    });
   }
 
   // الحصول على إعلانات المستخدم
@@ -69,18 +75,20 @@ class AdService {
     await _firestore.collection('ads').doc(adId).delete();
   }
 
-  // البحث عن إعلانات
+  // البحث عن إعلانات الموافقة عليها فقط
   Stream<List<AdModel>> searchAds(String keyword) {
     // Firestore لا يدعم البحث النصي الكامل مباشرة
     // حل بسيط: البحث في العنوان
     return _firestore
         .collection('ads')
-        .where('status', isEqualTo: 'active')
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => AdModel.fromJson(doc.data() as Map<String, dynamic>, doc.id))
-            .where((ad) => ad.title.contains(keyword) || ad.description.contains(keyword))
-            .toList());
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => AdModel.fromJson(doc.data() as Map<String, dynamic>, doc.id))
+          .where((ad) => ad.status == 'active' && ad.isApproved)
+          .where((ad) => ad.title.contains(keyword) || ad.description.contains(keyword))
+          .toList();
+    });
   }
 }

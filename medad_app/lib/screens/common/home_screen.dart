@@ -1,9 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../models/user_model.dart';
+import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 import '../ads/ads_list_screen.dart';
 import '../ads/add_ad_screen.dart';
+import '../ads/ad_details_screen.dart';
 import '../ads/my_ads_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -14,17 +17,51 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  UserModel? _userModel;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final data = await AuthService().getCurrentUserData();
+      if (mounted) {
+        setState(() => _userModel = data);
+      }
+    }
+  }
+
+  Future<void> _refresh() async {
+    _userModel = null;
+    await _loadUserData();
+    if (mounted) setState(() {});
+  }
+
+  bool get _isMerchant {
+    return _userModel?.role == 'merchant' &&
+        _userModel?.isApproved == true;
+  }
+
   Future<void> _openLogin() async {
     await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const LoginScreen()),
     );
-    if (mounted) setState(() {});
+    if (mounted) {
+      await _loadUserData();
+      setState(() {});
+    }
   }
 
   Future<void> _signOut() async {
-    await FirebaseAuth.instance.signOut();
-    if (mounted) setState(() {});
+    await AuthService().signOut();
+    if (mounted) {
+      setState(() => _userModel = null);
+    }
   }
 
   @override
@@ -59,7 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () async => setState(() {}),
+        onRefresh: _refresh,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
@@ -97,7 +134,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              user != null ? 'أهلاً بك!' : 'مرحباً',
+                              user != null
+                                  ? (_userModel?.name != null && _userModel!.name!.isNotEmpty
+                                      ? 'أهلاً بك، ${_userModel!.name!.trim().split(' ')[0]}!'
+                                      : 'أهلاً بك!')
+                                  : 'مرحباً',
                               style: textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
@@ -105,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             const SizedBox(height: 4),
                             Text(
                               user != null
-                                  ? 'تصفح الإعلانات أو أضف إعلاناً'
+                                  ? (_isMerchant ? 'تصفح الإعلانات أو أضف إعلاناً' : 'تصفح الإعلانات')
                                   : 'سجّل دخولك لتصفح الإعلانات',
                               style: textTheme.bodyMedium?.copyWith(
                                 color: Colors.grey,
@@ -140,7 +181,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      floatingActionButton: user != null
+      floatingActionButton: _isMerchant
           ? FloatingActionButton.extended(
               onPressed: () => Navigator.push(
                 context,
@@ -167,11 +208,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildStatsGrid() {
     return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance.collection('ads').get(),
+      future: FirebaseFirestore.instance
+          .collection('ads')
+          .get(),
       builder: (context, adsSnapshot) {
         int totalAds = 0;
         if (adsSnapshot.hasData) {
-          totalAds = adsSnapshot.data!.docs.length;
+          totalAds = adsSnapshot.data!.docs.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return data['isApproved'] == true;
+          }).length;
         }
 
         int myAds = 0;
@@ -183,39 +229,43 @@ class _HomeScreenState extends State<HomeScreen> {
               .length;
         }
 
-        return GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.3,
-          children: [
-            _buildStatCard(
-              'الإعلانات',
-              totalAds.toString(),
-              Icons.campaign_outlined,
-              const Color(0xFF667eea),
-            ),
+        final cards = [
+          _buildStatCard(
+            'الإعلانات',
+            totalAds.toString(),
+            Icons.campaign_outlined,
+            const Color(0xFF667eea),
+          ),
+          if (_isMerchant)
             _buildStatCard(
               'إعلاناتي',
               myAds.toString(),
               Icons.my_library_add_outlined,
               const Color(0xFFf093fb),
             ),
-            _buildStatCard(
-              'الزوار',
-              '-',
-              Icons.visibility_outlined,
-              const Color(0xFF4facfe),
-            ),
+          _buildStatCard(
+            'الزوار',
+            '-',
+            Icons.visibility_outlined,
+            const Color(0xFF4facfe),
+          ),
+          if (_isMerchant)
             _buildStatCard(
               'التقييم',
               '⭐',
               Icons.star_border,
               const Color(0xFF43e97b),
             ),
-          ],
+        ];
+
+        return GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: _isMerchant ? 2 : 1,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: _isMerchant ? 1.3 : 2.5,
+          children: cards,
         );
       },
     );
@@ -292,7 +342,7 @@ class _HomeScreenState extends State<HomeScreen> {
             MaterialPageRoute(builder: (context) => const AdsListScreen()),
           ),
         ),
-        if (user != null)
+        if (_isMerchant)
           _buildQuickActionCard(
             'إعلاناتي',
             Icons.person_outline,
@@ -302,7 +352,7 @@ class _HomeScreenState extends State<HomeScreen> {
               MaterialPageRoute(builder: (context) => const MyAdsScreen()),
             ),
           ),
-        if (user != null)
+        if (_isMerchant)
           _buildQuickActionCard(
             'إضافة إعلان',
             Icons.add_circle_outline,
@@ -367,11 +417,26 @@ class _HomeScreenState extends State<HomeScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('ads')
-          .where('status', isEqualTo: 'active')
           .orderBy('createdAt', descending: true)
-          .limit(5)
+          .limit(20)
           .snapshots(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                const SizedBox(height: 8),
+                Text(
+                  'خطأ: ${snapshot.error}',
+                  style: const TextStyle(color: Colors.red),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
         if (!snapshot.hasData) {
           return const Center(
             child: Padding(
@@ -380,8 +445,14 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         }
-        final ads = snapshot.data!.docs;
-        if (ads.isEmpty) {
+
+        // تصفية جانبية: نشط + موافق عليه
+        final approvedAds = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return (data['status'] == 'active') && (data['isApproved'] == true);
+        }).take(5).toList();
+
+        if (approvedAds.isEmpty) {
           return Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
@@ -408,9 +479,10 @@ class _HomeScreenState extends State<HomeScreen> {
         return ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: ads.length,
+          itemCount: approvedAds.length,
           separatorBuilder: (ctx, _) => const SizedBox(height: 8),
           itemBuilder: (context, index) {
+            final ads = approvedAds;
             final data = ads[index].data() as Map<String, dynamic>;
             final title = data['title'] ?? 'بدون عنوان';
             final price = '${data['price'] ?? 0} ريال';
@@ -420,7 +492,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
             return InkWell(
               onTap: () {
-                // Navigate to details (import dynamically to avoid cycles)
+                final doc = ads[index];
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AdDetailsScreen(adId: doc.id),
+                  ),
+                );
               },
               borderRadius: BorderRadius.circular(12),
               child: Container(

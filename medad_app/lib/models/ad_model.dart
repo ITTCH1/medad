@@ -11,6 +11,7 @@ class AdModel {
   List<String> images;
   String phone;
   bool isFeatured;
+  bool isApproved;
   DateTime createdAt;
   String status; // 'active', 'inactive', 'sold'
 
@@ -25,6 +26,7 @@ class AdModel {
     required this.images,
     required this.phone,
     this.isFeatured = false,
+    this.isApproved = false,
     required this.createdAt,
     this.status = 'active',
   });
@@ -39,6 +41,7 @@ class AdModel {
     'images': images,
     'phone': phone,
     'isFeatured': isFeatured,
+    'isApproved': isApproved,
     'createdAt': createdAt,
     'status': status,
   };
@@ -55,6 +58,7 @@ class AdModel {
       images: List<String>.from(json['images'] ?? []),
       phone: json['phone'] ?? '',
       isFeatured: json['isFeatured'] ?? false,
+      isApproved: json['isApproved'] ?? false,
       createdAt: (json['createdAt'] as Timestamp).toDate(),
       status: json['status'] ?? 'active',
     );
