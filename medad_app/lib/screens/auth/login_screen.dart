@@ -44,9 +44,15 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (userData == null) {
+        // المستخدم مسجل في Auth لكن غير موجود في Firestore
+        // يجب تسجيل الخروج أولاً
         await Provider.of<AuthService>(context, listen: false).signOut();
         if (!mounted) return;
-        _showDeletedAccountDialog();
+        
+        // عرض dialog مع خيار إنشاء حساب
+        if (mounted) {
+          _showNoAccountDialog();
+        }
         setState(() => _isLoading = false);
         return;
       }
@@ -86,13 +92,20 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      String errorMsg = 'رقم الجوال أو كلمة المرور غير صحيحة';
+      
+      // If account not found in Firestore, don't show error - show dialog instead
       if (e.toString().contains('account-exists-with-different-credential')) {
-        errorMsg = 'هذا الحساب موجود بالفعل. استخدم تسجيل الدخول برمز التحقق';
+        _showError('هذا الحساب موجود بالفعل. استخدم تسجيل الدخول برمز التحقق');
+      } else if (e.toString().contains('user-not-found') || e.toString().contains('INVALID_LOGIN_CREDENTIALS')) {
+        _showError('رقم الجوال أو كلمة المرور غير صحيحة');
+      } else {
+        debugPrint('Login error: $e');
+        _showError('حدث خطأ غير متوقع. حاول مرة أخرى');
       }
-      _showError(errorMsg);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -100,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
     String phone = _phoneController.text.trim();
     if (phone.isEmpty) { _showError('الرجاء إدخال رقم الجوال'); return; }
     if (!RegExp(r'^\d+$').hasMatch(phone)) { _showError('رقم الجوال يجب أن يحتوي على أرقام فقط'); return; }
-    if (phone.length < 7 || phone.length > 9) { _showError('رقم الجوال يجب أن يكون بين 7 و 9 أرقام'); return; }
+    if (phone.length < 7 || phone.length > 10) { _showError('رقم الجوال يجب أن يكون بين 7 و 10 أرقام'); return; }
     if (!phone.startsWith('+')) phone = '+967$phone';
 
     setState(() => _isLoading = true);
@@ -146,38 +159,129 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'إنشاء حساب',
+          textColor: Colors.white,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const CreateAccountScreen()),
+            );
+          },
+        ),
+      ),
     );
   }
 
-  void _showDeletedAccountDialog() {
-    showDialog(context: context, barrierDismissible: false, builder: (context) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Row(children: [Icon(Icons.account_circle_outlined, color: Colors.blue[700], size: 28), const SizedBox(width: 8), const Text('إنشاء حساب جديد')]),
-      content: const Text('لم يتم العثور على بيانات حسابك. يرجى إنشاء حساب جديد.'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('حسناً')),
-        ElevatedButton(onPressed: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateAccountScreen())); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white), child: const Text('إنشاء حساب جديد')),
-      ],
-    ));
+  /// Dialog: المستخدم غير موجود في Firestore
+  void _showNoAccountDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: true, // يمكن إغلاقه بالنقر خارج الـ dialog
+      builder: (context) => WillPopScope(
+        onWillPop: () async => true, // يمكن الرجوع بزر Back
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Icon(Icons.account_circle_outlined, color: Colors.blue[700], size: 28),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('إنشاء حساب جديد')),
+            ],
+          ),
+          content: const Text(
+            'لم يتم العثور على بيانات حسابك المرتبط برقم الجوال.\n\n'
+            'يرجى إنشاء حساب جديد أولاً.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('لاحقاً'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const CreateAccountScreen()),
+                );
+              },
+              icon: const Icon(Icons.person_add),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              label: const Text('إنشاء حساب'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showDisabledAccountDialog() {
-    showDialog(context: context, barrierDismissible: false, builder: (context) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Row(children: [Icon(Icons.block, color: Colors.red[700], size: 28), const SizedBox(width: 8), const Text('تم تعطيل حسابك')]),
-      content: const Text('تم تعطيل حسابك من قبل الإدارة. يرجى مراجعة الدعم الفني.'),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('حسناً'))],
-    ));
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => true,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Icon(Icons.block, color: Colors.red[700], size: 28),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('تم تعطيل حسابك')),
+            ],
+          ),
+          content: const Text(
+            'تم تعطيل حسابك من قبل الإدارة.\n\n'
+            'يرجى مراجعة الدعم الفني لمساعدتك.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('حسناً'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showRejectedAccountDialog() {
-    showDialog(context: context, barrierDismissible: false, builder: (context) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Row(children: [Icon(Icons.cancel, color: Colors.orange[700], size: 28), const SizedBox(width: 8), const Text('تم رفض حسابك')]),
-      content: const Text('تم رفض طلبك من قبل الإدارة. يرجى مراجعة الدعم الفني.'),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('حسناً'))],
-    ));
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => true,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Icon(Icons.cancel, color: Colors.orange[700], size: 28),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('تم رفض حسابك')),
+            ],
+          ),
+          content: const Text(
+            'تم رفض طلبك من قبل الإدارة.\n\n'
+            'يرجى مراجعة الدعم الفني لمعرفة السبب.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('حسناً'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override

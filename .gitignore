@@ -1,26 +1,36 @@
+# ============================================
+# MEDAD PROJECT - MASTER .gitignore
+# ============================================
+# This file ensures sensitive environment 
+# files are never committed to version control
+# ============================================
+
+# Environment files for both apps
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Flutter/Dart
+**/.dart_tool/
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.pub/
+**/build/
+**/coverage/
+
 # IDE
-.idea/
-.vscode/
-*.iml
+**/.idea/
+**/.vscode/
+**/*.iml
 
-# Flutter
-.dart_tool/
-.packages
-.pub-cache/
-.pub/
-build/
-
-# Android
-android/.gradle/
-android/app/build/
-
-# iOS
-ios/Pods/
-ios/.symlinks/
-ios/Flutter/
+# OS
+**/.DS_Store
+**/Thumbs.db
 
 # Logs
-*.log
+**/*.log
 
-# Env
-.env
+# Temporary files
+**/tmp/
+**/*.tmp

@@ -3,6 +3,7 @@
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Default [FirebaseOptions] for use with your Firebase apps.
 ///
@@ -49,20 +50,36 @@ class DefaultFirebaseOptions {
     }
   }
 
-  static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAZowL8CzcYr65m15e3wrFQXOhGgXnZmug',
-    appId: '1:951044983673:android:c12b3d9b9566281b36bda8',
-    messagingSenderId: '951044983673',
-    projectId: 'medad-1',
-    storageBucket: 'medad-1.firebasestorage.app',
-  );
+  static FirebaseOptions get android {
+    final apiKey = dotenv.env['FIREBASE_API_KEY'] ?? '';
+    final appId = dotenv.env['FIREBASE_APP_ID_ANDROID'] ?? '';
+    final messagingSenderId = dotenv.env['FIREBASE_MESSAGING_SENDER_ID'] ?? '';
+    final projectId = dotenv.env['FIREBASE_PROJECT_ID'] ?? '';
+    final storageBucket = dotenv.env['FIREBASE_STORAGE_BUCKET'] ?? '';
+    
+    return FirebaseOptions(
+      apiKey: apiKey,
+      appId: appId,
+      messagingSenderId: messagingSenderId,
+      projectId: projectId,
+      storageBucket: storageBucket,
+    );
+  }
 
-  static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyArTRQXA9KZen9NOFlpUlOQP33-caAbgDQ',
-    appId: '1:951044983673:ios:be12e38327b3f70636bda8',
-    messagingSenderId: '951044983673',
-    projectId: 'medad-1',
-    storageBucket: 'medad-1.firebasestorage.app',
-    iosBundleId: 'com.example.medadApp',
-  );
+  static FirebaseOptions get ios {
+    final apiKey = dotenv.env['FIREBASE_API_KEY'] ?? '';
+    final appId = dotenv.env['FIREBASE_APP_ID_IOS'] ?? '';
+    final messagingSenderId = dotenv.env['FIREBASE_MESSAGING_SENDER_ID'] ?? '';
+    final projectId = dotenv.env['FIREBASE_PROJECT_ID'] ?? '';
+    final storageBucket = dotenv.env['FIREBASE_STORAGE_BUCKET'] ?? '';
+    
+    return FirebaseOptions(
+      apiKey: apiKey,
+      appId: appId,
+      messagingSenderId: messagingSenderId,
+      projectId: projectId,
+      storageBucket: storageBucket,
+      iosBundleId: 'com.example.medadApp',
+    );
+  }
 }
