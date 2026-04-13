@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import 'role_selection_screen.dart';
@@ -10,11 +9,7 @@ class OTPScreen extends StatefulWidget {
   final String verificationId;
   final String phone;
 
-  const OTPScreen({
-    super.key,
-    required this.verificationId,
-    required this.phone,
-  });
+  const OTPScreen({super.key, required this.verificationId, required this.phone});
 
   @override
   State<OTPScreen> createState() => _OTPScreenState();
@@ -27,358 +22,139 @@ class _OTPScreenState extends State<OTPScreen> {
   int _countdown = 60;
 
   @override
-  void initState() {
-    super.initState();
-    _startCountdown();
-  }
+  void initState() { super.initState(); _startCountdown(); }
 
   void _startCountdown() {
     Future.delayed(const Duration(seconds: 1), () {
-      if (mounted && _countdown > 0) {
-        setState(() => _countdown--);
-        _startCountdown();
-      } else if (mounted) {
-        setState(() => _canResend = true);
-      }
+      if (mounted && _countdown > 0) { setState(() => _countdown--); _startCountdown(); }
+      else if (mounted) setState(() => _canResend = true);
     });
   }
 
   @override
-  void dispose() {
-    _otpController.dispose();
-    super.dispose();
-  }
+  void dispose() { _otpController.dispose(); super.dispose(); }
 
   Future<void> _resendOTP() async {
     if (!_canResend || _isLoading) return;
-
-    setState(() {
-      _isLoading = true;
-      _canResend = false;
-      _countdown = 60;
-    });
-
+    setState(() { _isLoading = true; _canResend = false; _countdown = 60; });
     try {
-      final authService = Provider.of<AuthService>(context, listen: false);
-      await authService.sendOTP(
-        widget.phone,
-        (newVerificationId) {
-          if (mounted) {
-            // تحديث verificationId الجديد
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('تم إرسال رمز التحقق بنجاح'),
-                backgroundColor: Colors.green,
-              ),
-            );
-          }
-        },
-      );
+      await Provider.of<AuthService>(context, listen: false).sendOTP(widget.phone, (_) {});
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إرسال رمز التحقق بنجاح'), backgroundColor: Colors.green, behavior: SnackBarBehavior.floating));
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _canResend = true;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('فشل إعادة الإرسال: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (mounted) { setState(() => _canResend = true); _showError('فشل إعادة الإرسال: $e'); }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _startCountdown();
-      }
+      if (mounted) { setState(() => _isLoading = false); _startCountdown(); }
     }
   }
 
   Future<void> _verifyOTP() async {
     final String otp = _otpController.text.trim();
-
-    if (otp.isEmpty || otp.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('الرجاء إدخال رمز التحقق المكون من 6 أرقام')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
+    if (otp.isEmpty || otp.length != 6) { _showError('الرجاء إدخال رمز التحقق المكون من 6 أرقام'); return; }
+    setState(() => _isLoading = true);
 
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
-
-      final UserCredential userCredential = await authService.verifyOTP(
-        widget.verificationId,
-        otp,
-      );
-
+      final userCredential = await authService.verifyOTP(widget.verificationId, otp);
       await authService.refreshUserToken();
-
       if (!mounted) return;
 
       final userData = await authService.getCurrentUserData();
-
       if (!mounted) return;
 
       if (userData == null) {
-        // مستخدم جديد → اختيار الدور
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (context) => RoleSelectionScreen(
-              uid: userCredential.user!.uid,
-              phone: widget.phone,
-            ),
-          ),
-          (_) => false,
-        );
+        Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => RoleSelectionScreen(uid: userCredential.user!.uid, phone: widget.phone)), (_) => false);
         return;
       }
 
-      // الحساب معطل
       if (!userData.isActive) {
         await authService.signOut();
         if (!mounted) return;
-        _showDisabledAccountDialog();
+        _showStatusDialog('تم تعطيل حسابك', 'تم تعطيل حسابك من قبل الإدارة. يرجى مراجعة الدعم الفني.', Colors.red);
         return;
       }
-
-      // الحساب مرفوض
       if (userData.status == 'rejected') {
         await authService.signOut();
         if (!mounted) return;
-        _showRejectedAccountDialog();
+        _showStatusDialog('تم رفض حسابك', 'تم رفض طلبك من قبل الإدارة. يرجى مراجعة الدعم الفني.', Colors.orange);
         return;
       }
 
       if (userData.role == 'customer' || userData.isApproved) {
-        // عميل أو حساب موافق عليه → الشاشة الرئيسية
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-          (route) => false,
-        );
+        Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const HomeScreen()), (route) => false);
       } else {
-        // تاجر أو مندوب بانتظار الموافقة
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (context) => WaitingApprovalScreen(
-              userId: userCredential.user!.uid,
-              role: userData.role,
-            ),
-          ),
-          (_) => false,
-        );
+        Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => WaitingApprovalScreen(userId: userCredential.user!.uid, role: userData.role)), (_) => false);
       }
     } catch (error) {
       debugPrint('❌ خطأ في التحقق: $error');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('رمز غير صحيح أو حدث خطأ: ${error.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (mounted) _showError('رمز غير صحيح أو حدث خطأ');
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showDisabledAccountDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.block, color: Colors.red[700], size: 28),
-            const SizedBox(width: 8),
-            const Text('تم تعطيل حسابك'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'تم تعطيل حسابك من قبل الإدارة.',
-              style: TextStyle(color: Colors.grey[700]),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.red.shade700, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'يرجى مراجعة الدعم الفني لمعرفة السبب.',
-                      style: TextStyle(color: Colors.red.shade900, fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('حسناً'),
-          ),
-        ],
-      ),
-    );
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating));
   }
 
-  void _showRejectedAccountDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.cancel, color: Colors.orange[700], size: 28),
-            const SizedBox(width: 8),
-            const Text('تم رفض حسابك'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'تم رفض طلبك من قبل الإدارة.',
-              style: TextStyle(color: Colors.grey[700]),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.orange.shade700, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'يرجى مراجعة الدعم الفني.',
-                      style: TextStyle(color: Colors.orange.shade900, fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('حسناً'),
-          ),
-        ],
-      ),
-    );
+  void _showStatusDialog(String title, String message, Color color) {
+    showDialog(context: context, barrierDismissible: false, builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(children: [Icon(Icons.info_outline, color: color, size: 28), const SizedBox(width: 8), Text(title)]),
+      content: Text(message),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('حسناً'))],
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('تأكيد الرمز'),
-        centerTitle: true,
-      ),
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: SingleChildScrollView(  // ✅ إضافة SingleChildScrollView لمنع التجاوز
-          padding: const EdgeInsets.all(24.0),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 20),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 20),
-              Icon(
-                Icons.sms,
-                size: 80,
-                color: Colors.teal.shade300,
+              const SizedBox(height: 40),
+              // أيقونة OTP
+              Container(
+                width: 100, height: 100,
+                decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.teal.shade400, Colors.teal.shade700]), borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.teal.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 10))]),
+                child: const Icon(Icons.sms, size: 50, color: Colors.white),
               ),
               const SizedBox(height: 24),
-              Text(
-                'تم إرسال رمز إلى',
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                textAlign: TextAlign.center,
-              ),
-              Text(
-                widget.phone,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-              ),
+              const Text('تأكيد الرمز', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A))),
+              const SizedBox(height: 8),
+              Text('تم إرسال رمز إلى', style: TextStyle(fontSize: 14, color: Colors.grey[500])),
+              Text(widget.phone, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.teal)),
               const SizedBox(height: 32),
-              TextField(
-                controller: _otpController,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                decoration: InputDecoration(
-                  labelText: 'رمز التحقق',
-                  hintText: '000000',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+
+              // حقل OTP
+              Container(
+                decoration: BoxDecoration(color: const Color(0xFFF8F9FB), borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.grey.shade200)),
+                child: TextField(
+                  controller: _otpController, keyboardType: TextInputType.number, textAlign: TextAlign.center,
+                  decoration: InputDecoration(
+                    hintText: '000000', hintStyle: TextStyle(color: Colors.grey[300], fontSize: 24, letterSpacing: 8),
+                    border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                   ),
-                  prefixIcon: const Icon(Icons.pin),
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 8),
                 ),
               ),
-              const SizedBox(height: 32),
-              _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : ElevatedButton(
-                      onPressed: _verifyOTP,
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 50),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'تحقق',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                    ),
+              const SizedBox(height: 24),
+
+              // زر التحقق
+              _isLoading ? const CircularProgressIndicator(color: Colors.teal) : Container(
+                width: double.infinity, height: 54,
+                decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.teal.shade600, Colors.teal.shade800]), borderRadius: BorderRadius.circular(14), boxShadow: [BoxShadow(color: Colors.teal.withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 6))]),
+                child: ElevatedButton(onPressed: _verifyOTP, style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))), child: const Text('تحقق', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white))),
+              ),
               const SizedBox(height: 16),
+
+              // إعادة الإرسال
               TextButton(
                 onPressed: _canResend && !_isLoading ? _resendOTP : null,
-                child: Text(
-                  _canResend
-                      ? 'إعادة إرسال الرمز'
-                      : 'إعادة إرسال الرمز ($_countdown ث)',
-                  style: TextStyle(
-                    color: _canResend ? Colors.teal : Colors.grey,
-                  ),
-                ),
+                child: Text(_canResend ? 'إعادة إرسال الرمز' : 'إعادة إرسال الرمز ($_countdown ث)', style: TextStyle(color: _canResend ? Colors.teal : Colors.grey[400], fontWeight: FontWeight.w500)),
               ),
-              const SizedBox(height: 20), // ✅ مسافة إضافية في الأسفل
             ],
           ),
         ),
