@@ -14,16 +14,97 @@ class _AdsScreenState extends State<AdsScreen> {
   // ✅ الموافقة على إعلان
   Future<void> _approveAd(String adId) async {
     try {
+      // جلب بيانات الإعلان أولاً
+      final adDoc = await FirebaseFirestore.instance.collection('ads').doc(adId).get();
+      final adData = adDoc.data() as Map<String, dynamic>?;
+      final merchantId = adData?['userId'] ?? '';
+      final adCategory = adData?['category'] ?? '';
+      final adTitle = adData?['title'] ?? '';
+
+      // تحديث حالة الإعلان
       await FirebaseFirestore.instance.collection('ads').doc(adId).update({
         'isApproved': true,
         'approvedAt': FieldValue.serverTimestamp(),
       });
 
+      // إنشاء إشعار للتاجر
+      if (merchantId.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('merchant_notifications').add({
+          'merchantId': merchantId,
+          'type': 'ad_approved',
+          'title': 'تمت الموافقة على إعلانك ✅',
+          'message': 'تمت الموافقة على إعلانك وهو متاح الآن للمشاهدة.',
+          'adId': adId,
+          'isRead': false,
+          'createdAt': DateTime.now().toUtc().toIso8601String(),
+        });
+      }
+
+      // إشعار العملاء المهتمين بهذه الفئة
+      String resultMessage = '';
+      if (adCategory.isNotEmpty) {
+        final allUsers = await FirebaseFirestore.instance
+            .collection('users')
+            .get();
+        
+        int totalUsers = allUsers.docs.length;
+        List<String> userInfos = [];
+        for (final userDoc in allUsers.docs) {
+          final userData = userDoc.data();
+          final favCats = userData['favoriteCategories'] as List<dynamic>?;
+          userInfos.add('${userDoc.id.substring(0, 8)} (${userData['role']}): ${favCats?.join(', ') ?? 'لا شيء'}');
+        }
+
+        final interestedUsers = await FirebaseFirestore.instance
+            .collection('users')
+            .where('favoriteCategories', arrayContains: adCategory)
+            .get();
+
+        int notificationCount = 0;
+        for (final userDoc in interestedUsers.docs) {
+          final customerId = userDoc.id;
+          if (customerId == merchantId) continue;
+
+          await FirebaseFirestore.instance.collection('customer_notifications').add({
+            'customerId': customerId,
+            'type': 'new_ad_category',
+            'title': 'إعلان جديد في فئة $adCategory 🎉',
+            'message': 'تم إضافة إعلان جديد "$adTitle" في الفئة التي تتابعها.',
+            'adId': adId,
+            'category': adCategory,
+            'isRead': false,
+            'createdAt': DateTime.now().toUtc().toIso8601String(),
+          });
+          notificationCount++;
+        }
+
+        resultMessage = '\n\n📊 نتائج إشعارات العملاء:\n'
+            '• الفئة: $adCategory\n'
+            '• إجمالي المستخدمين: $totalUsers\n'
+            '• المهتمين بـ "$adCategory": ${interestedUsers.docs.length}\n'
+            '• الإشعارات المُنشأة: $notificationCount\n'
+            '\n👥 تفاصيل المستخدمين:\n${userInfos.join('\n')}';
+      } else {
+        resultMessage = '\n\n⚠️ الإعلان بدون فئة - لم يتم إرسال إشعارات';
+      }
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تمت الموافقة على الإعلان بنجاح'),
-            backgroundColor: Colors.green,
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('✅ تمت الموافقة'),
+            content: SingleChildScrollView(
+              child: SelectableText(
+                'تمت الموافقة على الإعلان بنجاح.$resultMessage',
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('حسناً'),
+              ),
+            ],
           ),
         );
       }
@@ -62,11 +143,32 @@ class _AdsScreenState extends State<AdsScreen> {
     if (confirm != true) return;
 
     try {
+      // جلب بيانات الإعلان أولاً
+      final adDoc = await FirebaseFirestore.instance.collection('ads').doc(adId).get();
+      final adData = adDoc.data() as Map<String, dynamic>?;
+      final merchantId = adData?['userId'] ?? '';
+      debugPrint('📢 Rejecting ad, Merchant ID: $merchantId');
+
+      // تحديث حالة الإعلان
       await FirebaseFirestore.instance.collection('ads').doc(adId).update({
         'isApproved': false,
         'status': 'inactive',
         'rejectedAt': FieldValue.serverTimestamp(),
       });
+
+      // إنشاء إشعار للتاجر
+      if (merchantId.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('merchant_notifications').add({
+          'merchantId': merchantId,
+          'type': 'ad_rejected',
+          'title': 'لم يتم قبول إعلانك ❌',
+          'message': 'لم يتم قبول إعلانك. يرجى مراجعة شروط النشر.',
+          'adId': adId,
+          'isRead': false,
+          'createdAt': DateTime.now().toUtc().toIso8601String(),
+        });
+        debugPrint('✅ Rejection notification created for merchant: $merchantId');
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -77,6 +179,7 @@ class _AdsScreenState extends State<AdsScreen> {
         );
       }
     } catch (e) {
+      debugPrint('❌ Error rejecting ad: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

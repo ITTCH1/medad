@@ -36,6 +36,20 @@ class _UsersScreenState extends State<UsersScreen> {
         'approvedAt': FieldValue.serverTimestamp(),
       });
 
+      debugPrint('📢 Approving user: $userId as $userType');
+
+      // إنشاء إشعار للمستخدم (نستخدم customer_notifications كإشعار نظام)
+      await FirebaseFirestore.instance.collection('customer_notifications').add({
+        'customerId': userId,
+        'type': 'system',
+        'title': 'تمت الموافقة على حسابك ✅',
+        'message': 'تمت الموافقة على حسابك كـ ${userType == 'merchant' ? 'تاجر' : 'مندوب'}. يمكنك الآن استخدام جميع المزايا.',
+        'isRead': false,
+        'createdAt': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      debugPrint('✅ Approval notification created for user: $userId');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -46,6 +60,7 @@ class _UsersScreenState extends State<UsersScreen> {
         );
       }
     } catch (e) {
+      debugPrint('❌ Error approving user: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -88,6 +103,20 @@ class _UsersScreenState extends State<UsersScreen> {
         'rejectedAt': FieldValue.serverTimestamp(),
       });
 
+      debugPrint('📢 Rejecting user: $userId as $userType');
+
+      // إنشاء إشعار للمستخدم
+      await FirebaseFirestore.instance.collection('customer_notifications').add({
+        'customerId': userId,
+        'type': 'system',
+        'title': 'لم يتم قبول طلبك ❌',
+        'message': 'لم يتم قبول طلبك كـ ${userType == 'merchant' ? 'تاجر' : 'مندوب'}. يرجى التواصل مع الدعم الفني.',
+        'isRead': false,
+        'createdAt': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      debugPrint('✅ Rejection notification created for user: $userId');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -97,6 +126,7 @@ class _UsersScreenState extends State<UsersScreen> {
         );
       }
     } catch (e) {
+      debugPrint('❌ Error rejecting user: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

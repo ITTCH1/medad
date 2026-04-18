@@ -3,14 +3,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_service.dart';
 import '../../widgets/ads_news_ticker.dart';
 import '../auth/login_screen.dart';
 import '../ads/ads_list_screen.dart';
 import '../ads/add_ad_screen.dart';
 import '../ads/ad_details_screen.dart';
 import '../ads/my_ads_screen.dart';
-import 'notifications_screen.dart';
+import 'merchant_notifications_screen.dart';
+import 'customer_notifications_screen.dart';
 import 'pending_ads_screen.dart';
+import 'favorite_categories_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -82,6 +85,125 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool get _isMerchant {
     return _userModel?.role == 'merchant' && _userModel?.isApproved == true;
+  }
+
+  Widget _buildNotificationsButton() {
+    final isMerchant = _userModel?.role == 'merchant' && _userModel?.isApproved == true;
+    final isCustomer = _userModel?.role == 'customer';
+
+    if (isMerchant) {
+      // إشعارات التاجر
+      return StreamBuilder<int>(
+        stream: NotificationService().getMerchantUnreadCount(),
+        builder: (context, snapshot) {
+          final unreadCount = snapshot.data ?? 0;
+          return Stack(
+            children: [
+              IconButton(
+                icon: Icon(Icons.notifications, color: Colors.white.withValues(alpha: 0.8)),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const MerchantNotificationsScreen(),
+                    ),
+                  );
+                },
+                tooltip: 'إشعارات التاجر',
+              ),
+              if (unreadCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      unreadCount > 9 ? '9+' : '$unreadCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      );
+    } else if (isCustomer) {
+      // إشعارات العميل
+      return StreamBuilder<int>(
+        stream: NotificationService().getCustomerUnreadCount(),
+        builder: (context, snapshot) {
+          final unreadCount = snapshot.data ?? 0;
+          return Stack(
+            children: [
+              IconButton(
+                icon: Icon(Icons.notifications, color: Colors.white.withValues(alpha: 0.8)),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const CustomerNotificationsScreen(),
+                    ),
+                  );
+                },
+                tooltip: 'إشعارات العميل',
+              ),
+              if (unreadCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      unreadCount > 9 ? '9+' : '$unreadCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      );
+    }
+
+    // للأدوار الأخرى (مثل delivery)
+    return IconButton(
+      icon: Icon(Icons.notifications, color: Colors.white.withValues(alpha: 0.8)),
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const CustomerNotificationsScreen(),
+          ),
+        );
+      },
+      tooltip: 'الإشعارات',
+    );
   }
 
   Future<void> _openLogin() async {
@@ -212,62 +334,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               actions: [
-                // زر الإشعارات مع العداد
-                if (user != null)
-                  StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('ads')
-                        .where('userId', isEqualTo: user.uid)
-                        .where('isApproved', isEqualTo: false)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      final pendingCount = snapshot.hasData
-                          ? snapshot.data!.docs.length
-                          : 0;
-
-                      return Stack(
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.notifications, color: Colors.white.withValues(alpha: 0.8)),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const MyNotificationsScreen(),
-                                ),
-                              );
-                            },
-                            tooltip: 'الإشعارات',
-                          ),
-                          if (pendingCount > 0)
-                            Positioned(
-                              right: 8,
-                              top: 8,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(
-                                  color: Colors.red,
-                                  shape: BoxShape.circle,
-                                ),
-                                constraints: const BoxConstraints(
-                                  minWidth: 16,
-                                  minHeight: 16,
-                                ),
-                                child: Text(
-                                  pendingCount > 9 ? '9+' : '$pendingCount',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
+                // زر الإشعارات مع العداد - حسب الدور
+                if (user != null && _userModel != null)
+                  _buildNotificationsButton(),
                 IconButton(
                   icon: Icon(Icons.logout, color: Colors.white.withValues(alpha: 0.8)),
                   onPressed: user != null ? _signOut : _openLogin,
@@ -602,6 +671,20 @@ class _HomeScreenState extends State<HomeScreen> {
           const Color(0xFFE3F2FD),
           () => user != null ? null : _openLogin(),
         ),
+        // للفئات المفضلة (العميل فقط)
+        if (_userModel?.role == 'customer')
+          _buildQuickActionCard(
+            'الفئات المفضلة',
+            Icons.favorite_border,
+            const Color(0xFFe91e63),
+            const Color(0xFFFCE4EC),
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const FavoriteCategoriesScreen(),
+              ),
+            ),
+          ),
       ],
     );
   }
