@@ -49,6 +49,7 @@ dependencies:
   connectivity_plus: ^6.0.3
   logger: ^2.0.2+1
   shared_preferences: ^2.2.2
+  firebase_app_check: ^0.4.3
 
 dev_dependencies:
   flutter_test:
